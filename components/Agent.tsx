@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { vapi } from "@/lib/vapi.sdk";
+import { voiceService } from "@/lib/voice.service";
 import { interviewer } from "@/constants";
 import { createFeedback } from "@/lib/actions/general.action";
 
@@ -65,20 +65,20 @@ const Agent = ({
       console.log("Error:", error);
     };
 
-    vapi.on("call-start", onCallStart);
-    vapi.on("call-end", onCallEnd);
-    vapi.on("message", onMessage);
-    vapi.on("speech-start", onSpeechStart);
-    vapi.on("speech-end", onSpeechEnd);
-    vapi.on("error", onError);
+    voiceService.on("call-start", onCallStart);
+    voiceService.on("call-end", onCallEnd);
+    voiceService.on("message", onMessage);
+    voiceService.on("speech-start", onSpeechStart);
+    voiceService.on("speech-end", onSpeechEnd);
+    voiceService.on("error", onError);
 
     return () => {
-      vapi.off("call-start", onCallStart);
-      vapi.off("call-end", onCallEnd);
-      vapi.off("message", onMessage);
-      vapi.off("speech-start", onSpeechStart);
-      vapi.off("speech-end", onSpeechEnd);
-      vapi.off("error", onError);
+      voiceService.off("call-start", onCallStart);
+      voiceService.off("call-end", onCallEnd);
+      voiceService.off("message", onMessage);
+      voiceService.off("speech-start", onSpeechStart);
+      voiceService.off("speech-end", onSpeechEnd);
+      voiceService.off("error", onError);
     };
   }, []);
 
@@ -118,11 +118,34 @@ const Agent = ({
     setCallStatus(CallStatus.CONNECTING);
 
     if (type === "generate") {
-      await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
-        variableValues: {
-          username: userName,
-          userid: userId,
+      // Generate mode: AI asks user about interview preferences
+      const generateConfig = {
+        ...interviewer,
+        firstMessage: `Hello ${userName}! I'm here to help you create a personalized mock interview. Let me ask you a few questions. What role are you preparing for?`,
+        model: {
+          ...interviewer.model,
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI interview assistant helping ${userName} create a customized mock interview. 
+              
+Your task:
+1. Ask them what job role they're preparing for
+2. Ask about their experience level (Junior, Mid-level, Senior)
+3. Ask what technologies/skills they want to focus on
+4. Ask if they want technical or behavioral questions (or both)
+5. Ask how many questions they want (5-10 recommended)
+
+Keep the conversation natural and friendly. After gathering all information, summarize what you'll create and end the conversation.
+
+Be conversational and brief. This is a voice conversation.`,
+            },
+          ],
         },
+      };
+
+      await voiceService.start(generateConfig, {
+        variableValues: {},
       });
     } else {
       let formattedQuestions = "";
@@ -132,7 +155,7 @@ const Agent = ({
           .join("\n");
       }
 
-      await vapi.start(interviewer, {
+      await voiceService.start(interviewer, {
         variableValues: {
           questions: formattedQuestions,
         },
@@ -142,7 +165,7 @@ const Agent = ({
 
   const handleDisconnect = () => {
     setCallStatus(CallStatus.FINISHED);
-    vapi.stop();
+    voiceService.stop();
   };
 
   return (
@@ -166,13 +189,25 @@ const Agent = ({
         {/* User Profile Card */}
         <div className="card-border">
           <div className="card-content">
-            <Image
-              src="/user-avatar.png"
-              alt="profile-image"
-              width={539}
-              height={539}
-              className="rounded-full object-cover size-[120px]"
-            />
+            <div className="rounded-full bg-gray-200 size-[120px] flex items-center justify-center relative">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-16 w-16 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+              {callStatus === "ACTIVE" && (
+                <div className="absolute inset-0 rounded-full border-2 border-blue-400 animate-pulse" />
+              )}
+            </div>
             <h3>{userName}</h3>
           </div>
         </div>
